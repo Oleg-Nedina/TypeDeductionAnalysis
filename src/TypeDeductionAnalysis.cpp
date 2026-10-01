@@ -27,10 +27,33 @@ TypeDeductionAnalysis::Result TypeDeductionAnalysis::run(Module& m, ModuleAnalys
 
   TypeDeductionAnalysisInfo::getInstance().initialize(m);
 
+  std::set<Function*> excludedFns;
+  if (auto* GA = m.getGlobalVariable("llvm.global.annotations")) {
+    if (auto* CA = dyn_cast_or_null<ConstantArray>(GA->getOperand(0))) {
+      for (Value* op : CA->operands()) {
+        auto* CS = dyn_cast<ConstantStruct>(op);
+        if (!CS || CS->getNumOperands() < 2) continue;
+        auto* F = dyn_cast<Function>(CS->getOperand(0));
+        auto* GAnn = dyn_cast<GlobalVariable>(CS->getOperand(1));
+        if (!F || !GAnn || !GAnn->hasInitializer()) continue;
+        if (auto* A = dyn_cast<ConstantDataArray>(GAnn->getInitializer())) {
+          if (A->getAsString().starts_with("exclude"))
+            excludedFns.insert(F);
+        }
+      }
+    }
+  }
+
+
+
   // Build initial deduction queue
   for (Function& f : m) {
     if (f.isDeclaration()) {
       // Cannot deduce from a declaration: just create its transparent type (could be opaque)
+      updateDeducedTypes(&f, TransparentTypeFactory::createFromValue(&f));
+      continue;
+    }
+    if (f.hasFnAttribute("exclude") || excludedFns.count(&f)) {
       updateDeducedTypes(&f, TransparentTypeFactory::createFromValue(&f));
       continue;
     }
@@ -47,14 +70,21 @@ TypeDeductionAnalysis::Result TypeDeductionAnalysis::run(Module& m, ModuleAnalys
     deductionQueue.push_back(&globalValue);
 
   // Continue deducing until a fix point is reached
+  constexpr unsigned MAX_TDA_ITERATIONS = 4;
   unsigned iterations = 0;
-  while (changed) {
+  while (changed && iterations < MAX_TDA_ITERATIONS) {
     LLVM_DEBUG(log() << Logger::Blue << "[Deduction iteration " << iterations << "]\n"
                      << Logger::Reset);
     iterations++;
     changed = false;
     for (Value* value : deductionQueue)
       deduceFromValue(value);
+  }
+
+  if (iterations >= MAX_TDA_ITERATIONS) {
+    LLVM_DEBUG(log().logln("[TDA Warning] Reached maximum iteration limit (" + 
+                           std::to_string(MAX_TDA_ITERATIONS) + "); fallback to conservative opaque pointers.", 
+                           Logger::Yellow));
   }
   LLVM_DEBUG(
     Logger& logger = log();
