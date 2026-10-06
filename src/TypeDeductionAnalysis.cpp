@@ -70,7 +70,7 @@ TypeDeductionAnalysis::Result TypeDeductionAnalysis::run(Module& m, ModuleAnalys
     deductionQueue.push_back(&globalValue);
 
   // Continue deducing until a fix point is reached
-  constexpr unsigned MAX_TDA_ITERATIONS = 4;
+  constexpr unsigned MAX_TDA_ITERATIONS = 2;
   unsigned iterations = 0;
   while (changed && iterations < MAX_TDA_ITERATIONS) {
     LLVM_DEBUG(log() << Logger::Blue << "[Deduction iteration " << iterations << "]\n"
