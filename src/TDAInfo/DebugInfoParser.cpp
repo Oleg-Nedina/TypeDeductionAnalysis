@@ -41,7 +41,7 @@ void DebugInfoParser::insertPaddingInfo(DICompositeType* diCompositeType,
   const StructLayout* structLayout = dataLayout.getStructLayout(structType);
   unsigned fieldIdx = 0;
   auto isPadding = [&paddingRanges, &structLayout, structType](unsigned& fieldIdx) -> bool {
-    if (fieldIdx >= structType->getNumElements()) return false;
+    if (!structType || fieldIdx >= structType->getNumElements()) return false;
     return std::ranges::any_of(paddingRanges, [&structLayout, fieldIdx](const StructPaddingInfo::ByteRange& range) {
       return structLayout->getElementOffset(fieldIdx) == range.first;
     });
@@ -50,9 +50,9 @@ void DebugInfoParser::insertPaddingInfo(DICompositeType* diCompositeType,
     if (!isa<DICompositeType>(diNode) && !isa<DIDerivedType>(diNode))
       continue;
     StructType* childStructType = nullptr;
-    while (fieldIdx < structType->getNumElements() && isPadding(fieldIdx))
+    while (structType && fieldIdx < structType->getNumElements() && isPadding(fieldIdx))
       fieldIdx++;
-    if (fieldIdx < structType->getNumElements())
+    if (structType && fieldIdx < structType->getNumElements())
       childStructType = dyn_cast<StructType>(structType->getElementType(fieldIdx));
     // Direct nested composites
     if (auto* nestedDiCompositeType = dyn_cast<DICompositeType>(diNode))
