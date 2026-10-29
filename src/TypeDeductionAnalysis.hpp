@@ -29,6 +29,8 @@ private:
   llvm::SmallPtrSet<llvm::Instruction*, 32> tbaaUsedForInstruction;
   llvm::Value* currDeductionValue = nullptr;
   bool changed = true;
+  std::unordered_set<llvm::Value*> saturatedValues;
+  unsigned statWidenedValues = 0;
 
   const TypeAliasSet& updateDeducedTypes(llvm::Value* value, std::unique_ptr<TransparentType> deducedType);
   TypeAliasSet getOrCreateDeducedTypes(llvm::Value* value);
