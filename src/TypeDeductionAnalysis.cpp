@@ -81,6 +81,7 @@ TypeDeductionAnalysis::Result TypeDeductionAnalysis::run(Module& m, ModuleAnalys
       deduceFromValue(value);
   }
 
+  errs() << "[TDA] widened alias sets: " << statWidenedValues << "\n";
   if (iterations >= MAX_TDA_ITERATIONS) {
     LLVM_DEBUG(log().logln("[TDA Warning] Reached maximum iteration limit (" + 
                            std::to_string(MAX_TDA_ITERATIONS) + "); fallback to conservative opaque pointers.", 
@@ -156,6 +157,8 @@ const TypeAliasSet& TypeDeductionAnalysis::updateDeducedTypes(Value* value,
   TypeAliasSet& typeAliasSet = deducedTypes[value];
   if (!deducedType)
     return typeAliasSet;
+  if (saturatedValues.contains(value))
+    return typeAliasSet;
 
   Logger& logger = log();
   auto indenter = logger.getIndenter();
@@ -183,6 +186,16 @@ const TypeAliasSet& TypeDeductionAnalysis::updateDeducedTypes(Value* value,
     }
   }
   else {
+    constexpr size_t MAX_ALIAS_SET_SIZE = 8;
+    if (typeAliasSet.size() >= MAX_ALIAS_SET_SIZE && deducedType->isPointerTT() &&
+        (*typeAliasSet.begin())->isPointerTT()) {
+      typeAliasSet.clear();
+      typeAliasSet.insert(TransparentTypeFactory::createFromType(value->getType(), 0));
+      saturatedValues.insert(value);
+      statWidenedValues++;
+      changed = true;
+      return typeAliasSet;
+    }
     assert(typeAliasSet.empty()                                                      // First alias
            || ((*typeAliasSet.begin())->isPointerTT() && deducedType->isPointerTT()) // All pointers
            || (*typeAliasSet.begin())->isStructurallyEquivalent(deducedType.get())); // All structurally equivalent

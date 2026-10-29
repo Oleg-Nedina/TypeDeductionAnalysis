@@ -108,7 +108,7 @@ std::unique_ptr<TransparentType>
 TransparentType::cloneAndSetIndexedType(const TransparentType* setType,
                                         const TransparentType* gepSrcElType,
                                         std::optional<iterator_range<Use*>> gepIndices) const {
-  if (setType && setType->isPointerTT() && setType->getFullyUnwrappedType()->isStructTT())
+  if (!this->containsOpaquePtr() || (setType && setType->isPointerTT() && setType->getFullyUnwrappedType()->isStructTT()))
     return this->clone();
   return getOrSetIndexedType(gepSrcElType, gepIndices, setType, true);
 }
